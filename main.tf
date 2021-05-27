@@ -108,7 +108,7 @@ resource "google_compute_instance" "ci_runner" {
     # ACTIONS_RUNNER_INPUT_NAME is used by config.sh
     ACTIONS_RUNNER_INPUT_NAME=$HOSTNAME
     #configure runner
-    RUNNER_ALLOW_RUNASROOT=1 /runner/config.sh --unattended --replace --work "/runner-tmp" --url "https://github.com/kaizenticketing/karol-test" --token "${var.ci_token}"
+    RUNNER_ALLOW_RUNASROOT=1 /runner/config.sh --unattended --replace --work "/runner-tmp" --url "${var.ci_repo}" --token "${var.ci_token}"
     #install and start runner service
     cd /runner || exit
     ./svc.sh install

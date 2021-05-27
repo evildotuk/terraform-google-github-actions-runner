@@ -19,6 +19,10 @@ variable "ci_token" {
   type        = string
   description = "The runner registration token obtained from GitHub."
 }
+variable "ci_repo" {
+  type        = string
+  description = "The runner repository from GitHub."
+}
 variable "gcp_project" {
   type        = string
   description = "The GCP project to deploy the runner into."
