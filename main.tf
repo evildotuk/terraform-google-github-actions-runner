@@ -68,7 +68,7 @@ resource "google_compute_instance" "ci_runner" {
     initialize_params {
       image = "ubuntu-1804-lts"
       size  = var.ci_runner_disk_size
-      type  = "pd-standard"
+      type  = "pd-balanced"
     }
   }
 
