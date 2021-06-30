@@ -1,5 +1,6 @@
 /**
  * Copyright 2021 Mantel Group Pty Ltd
+ * Modified by EDOT Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -81,4 +82,14 @@ variable "network_subnetwork" {
 variable "boot_disk_type" {
   type        = string
   default     = "pd-balanced"
+}
+
+variable "boot_image" {
+  type = string
+  default = "ubuntu-2004-lts"
+}
+
+variable "preemptible" {
+  type = bool
+  default = true
 }

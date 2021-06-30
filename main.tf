@@ -1,5 +1,6 @@
 /**
  * Copyright 2021 Mantel Group Pty Ltd
+ * Modified by EDOT Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,10 +38,15 @@ resource "google_compute_instance" "ci_runner" {
 
   boot_disk {
     initialize_params {
-      image = "ubuntu-1804-lts"
+      image = var.boot_image
       size  = var.ci_runner_disk_size
       type  = var.boot_disk_type
     }
+  }
+
+  scheduling {
+    preemptible         = var.preemptible
+    automatic_restart   = ! var.preemptible
   }
 
   network_interface {
@@ -67,7 +73,7 @@ resource "google_compute_instance" "ci_runner" {
   metadata_startup_script = <<SCRIPT
     set -e
     apt-get update
-    apt-get -y install jq docker.io docker-containerd git
+    apt-get -y install jq docker.io git
     #github runner version
     curl -L -o /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" 
     chmod a+x /usr/local/bin/kubectl
