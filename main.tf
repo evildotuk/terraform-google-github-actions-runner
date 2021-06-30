@@ -67,8 +67,10 @@ resource "google_compute_instance" "ci_runner" {
   metadata_startup_script = <<SCRIPT
     set -e
     apt-get update
-    apt-get -y install jq docker.io docker-containerd kubectl git
+    apt-get -y install jq docker.io docker-containerd git
     #github runner version
+    curl -L -o /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" 
+    chmod a+x /usr/local/bin/kubectl
     # GH_RUNNER_VERSION="2.278.0"
     #get actions binary
     curl -o actions.tar.gz --location "https://github.com/actions/runner/releases/download/v2.278.0/actions-runner-linux-x64-2.278.0.tar.gz"
