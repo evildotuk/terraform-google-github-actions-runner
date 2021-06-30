@@ -26,35 +26,6 @@ resource "google_service_account" "ci_runner" {
   account_id   = "${var.gcp_resource_prefix}-runner"
   display_name = "GitHub CI Runner"
 }
-# resource "google_project_iam_member" "instanceadmin_ci_runner" {
-#   project = var.gcp_project
-#   role    = "roles/compute.instanceAdmin.v1"
-#   member  = "serviceAccount:${google_service_account.ci_runner.email}"
-# }
-# resource "google_project_iam_member" "networkadmin_ci_runner" {
-#   project = var.gcp_project
-#   role    = "roles/compute.networkAdmin"
-#   member  = "serviceAccount:${google_service_account.ci_runner.email}"
-# }
-# resource "google_project_iam_member" "securityadmin_ci_runner" {
-#   project = var.gcp_project
-#   role    = "roles/compute.securityAdmin"
-#   member  = "serviceAccount:${google_service_account.ci_runner.email}"
-# }
-
-# Service account for GitHub CI build instances that are dynamically spawned by the runner.
-# resource "google_service_account" "ci_worker" {
-#   project      = var.gcp_project
-#   account_id   = "${var.gcp_resource_prefix}-worker"
-#   display_name = "GitHub CI Worker"
-# }
-
-# Allow GitHub CI runner to use the worker service account.
-# resource "google_service_account_iam_member" "ci_worker_ci_runner" {
-#   service_account_id = google_service_account.ci_worker.name
-#   role               = "roles/iam.serviceAccountUser"
-#   member             = "serviceAccount:${google_service_account.ci_runner.email}"
-# }
 
 resource "google_compute_instance" "ci_runner" {
   project      = var.gcp_project
@@ -68,7 +39,7 @@ resource "google_compute_instance" "ci_runner" {
     initialize_params {
       image = "ubuntu-1804-lts"
       size  = var.ci_runner_disk_size
-      type  = "pd-balanced"
+      type  = var.boot_disk_type
     }
   }
 
@@ -86,14 +57,17 @@ resource "google_compute_instance" "ci_runner" {
     ./svc.sh stop
     ./svc.sh uninstall
     #remove the runner configuration
-    RUNNER_ALLOW_RUNASROOT=1  /runner/config.sh remove --unattended --token "${var.ci_token}"
-    SCRIPT
+    token=$(curl -s -XPOST \
+    -H "authorization: token ${var.ci_token}" \
+    https://api.github.com/repos/${var.ci_owner}/${var.ci_repo}/actions/runners/registration-token | jq -r .token)
+    RUNNER_ALLOW_RUNASROOT=1  /runner/config.sh remove --unattended --token $token
+  SCRIPT
   }
 
   metadata_startup_script = <<SCRIPT
     set -e
     apt-get update
-    apt-get -y install jq docker.io docker-containerd
+    apt-get -y install jq docker.io docker-containerd kubectl git
     #github runner version
     # GH_RUNNER_VERSION="2.278.0"
     #get actions binary
@@ -106,9 +80,12 @@ resource "google_compute_instance" "ci_runner" {
     #get actions token
     # shellcheck disable=SC2034
     # ACTIONS_RUNNER_INPUT_NAME is used by config.sh
+    token=$(curl -s -XPOST \
+    -H "authorization: token ${var.ci_token}" \
+    https://api.github.com/repos/${var.ci_owner}/${var.ci_repo}/actions/runners/registration-token | jq -r .token)
     ACTIONS_RUNNER_INPUT_NAME=$HOSTNAME
     #configure runner
-    RUNNER_ALLOW_RUNASROOT=1 /runner/config.sh --unattended --replace --work "/runner-tmp" --url "${var.ci_repo}" --token "${var.ci_token}"
+    RUNNER_ALLOW_RUNASROOT=1 /runner/config.sh --unattended --replace --work "/runner-tmp" --url https://github.com/${var.ci_owner}/${var.ci_repo} --token $token
     #install and start runner service
     cd /runner || exit
     ./svc.sh install
@@ -121,4 +98,3 @@ SCRIPT
   }
 }
 
-# ACTIONS_RUNNER_INPUT_TOKEN="$(curl -sS --request POST --url "https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/actions/runners/registration-token" --header "authorization: Bearer ${var.ci_token}"  --header 'content-type: application/json' | jq -r .token)"

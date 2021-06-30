@@ -19,6 +19,10 @@ variable "ci_token" {
   type        = string
   description = "The runner registration token obtained from GitHub."
 }
+variable "ci_owner" {
+  type        = string
+  description = "The repository organisation name / username from GitHub."
+}
 variable "ci_repo" {
   type        = string
   description = "The runner repository from GitHub."
@@ -62,38 +66,6 @@ themselves run on separate worker instances.
 EOF
 }
 
-# Worker options
-# variable "ci_concurrency" {
-#   type        = number
-#   default     = 1
-#   description = "The maximum number of worker instances to create."
-# }
-# variable "ci_worker_disk_size" {
-#   type        = string
-#   default     = "10"
-#   description = "The size of the persistent disk in GB."
-# }
-# variable "ci_worker_idle_time" {
-#   type        = number
-#   default     = 300
-#   description = "The maximum idle time for workers before they are shutdown."
-# }
-# variable "ci_worker_instance_tags" {
-#   type        = string
-#   default     = "GitHub-ci-worker"
-#   description = "The GCP instance networking tags to apply."
-# }
-# variable "ci_worker_instance_type" {
-#   type        = string
-#   default     = "n1-standard-1"
-#   description = "The GCP instance type.  This can be adjusted to meet the demands of builds jobs."
-# }
-# variable "docker_privileged" {
-#   type        = string
-#   default     = "false"
-#   description = "Give extended privileges to container."
-# }
-
 variable "network_interface" {
   type = string
   default = "default"
@@ -104,4 +76,9 @@ variable "network_subnetwork" {
   type = string
   default = null
   description = "(Optional) The name or self_link of the subnetwork to attach this interface to. The subnetwork must exist in the same region this instance will be created in. If network isn't provided it will be inferred from the subnetwork."
+}
+
+variable "boot_disk_type" {
+  type        = string
+  default     = "pd-balanced"
 }
