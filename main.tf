@@ -80,8 +80,8 @@ resource "google_compute_instance" "ci_runner" {
     # GH_RUNNER_VERSION="2.278.0"
     #get actions binary
     curl -o actions.tar.gz --location "https://github.com/actions/runner/releases/download/v2.278.0/actions-runner-linux-x64-2.278.0.tar.gz"
-    mkdir /runner
-    mkdir /runner-tmp
+    mkdir -p /runner
+    mkdir -p /runner-tmp
     tar -zxf actions.tar.gz --directory /runner
     rm -f actions.tar.gz
     /runner/bin/installdependencies.sh
