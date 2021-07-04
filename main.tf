@@ -28,6 +28,13 @@ resource "google_service_account" "ci_runner" {
   display_name = "GitHub CI Runner"
 }
 
+resource "google_project_iam_binding" "monitoring-writer-role" {
+    role    = "roles/monitoring.metricWriter"
+     members = [
+         "serviceAccount:${google_service_account.ci_runner.email}"
+     ]
+ }
+
 resource "google_compute_instance" "ci_runner" {
   project      = var.gcp_project
   name         = "${var.gcp_resource_prefix}-runner"
@@ -74,6 +81,8 @@ resource "google_compute_instance" "ci_runner" {
     set -e
     apt-get update
     apt-get -y install jq docker.io git
+    # GCP agent
+    curl -sSO https://dl.google.com/cloudagents/add-monitoring-agent-repo.sh && sudo bash add-monitoring-agent-repo.sh --also-install && sudo service stackdriver-agent start
     #github runner version
     curl -L -o /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" 
     chmod a+x /usr/local/bin/kubectl
@@ -91,7 +100,10 @@ resource "google_compute_instance" "ci_runner" {
     token=$(curl -s -XPOST \
     -H "authorization: token ${var.ci_token}" \
     https://api.github.com/repos/${var.ci_owner}/${var.ci_repo}/actions/runners/registration-token | jq -r .token)
-    ACTIONS_RUNNER_INPUT_NAME=$HOSTNAME
+    export ACTIONS_RUNNER_INPUT_NAME=$HOSTNAME
+    # reconfigure on restart if needed
+    ./svc.sh uninstall || true
+    RUNNER_ALLOW_RUNASROOT=1 /runner/config.sh remove --token $token || true
     #configure runner
     RUNNER_ALLOW_RUNASROOT=1 /runner/config.sh --unattended --replace --work "/runner-tmp" --url https://github.com/${var.ci_owner}/${var.ci_repo} --token $token
     #install and start runner service
@@ -102,7 +114,6 @@ SCRIPT
 
   service_account {
     email  = google_service_account.ci_runner.email
-    scopes = ["cloud-platform", "logging-write", "monitoring"] # TODO: not really?
+    scopes = ["cloud-platform", "logging-write", "monitoring", "https://www.googleapis.com/auth/monitoring.write"]
   }
 }
-
