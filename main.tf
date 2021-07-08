@@ -79,8 +79,12 @@ resource "google_compute_instance" "ci_runner" {
 
   metadata_startup_script = <<SCRIPT
     set -e
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    echo \
+    "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
+    $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
     apt-get update
-    apt-get -y install jq docker.io git
+    apt-get -y install jq docker-ce docker-ce-cli containerd.io git
     # GCP agent
     curl -sSO https://dl.google.com/cloudagents/add-monitoring-agent-repo.sh && sudo bash add-monitoring-agent-repo.sh --also-install && sudo service stackdriver-agent start
     #github runner version
@@ -110,6 +114,8 @@ resource "google_compute_instance" "ci_runner" {
     cd /runner || exit
     ./svc.sh install
     ./svc.sh start
+    (crontab -l 2>/dev/null; echo "0 * * * * docker system prune -af  --filter \"until=12h\"") | crontab -
+    (crontab -l 2>/dev/null; echo "0 * * * * docker builder prune -af  --filter \"until=12h\"") | crontab -
 SCRIPT
 
   service_account {
