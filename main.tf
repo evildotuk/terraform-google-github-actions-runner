@@ -35,20 +35,19 @@ resource "google_project_iam_binding" "monitoring-writer-role" {
      ]
  }
 
-resource "google_compute_instance" "ci_runner" {
+resource "google_compute_instance_template" "ci_runner" {
   project      = var.gcp_project
   name         = "${var.gcp_resource_prefix}-runner"
   machine_type = var.ci_runner_instance_type
-  zone         = var.gcp_zone
+  # zone         = var.gcp_zone
 
-  allow_stopping_for_update = true
+  # allow_stopping_for_update = true
 
-  boot_disk {
-    initialize_params {
-      image = var.boot_image
-      size  = var.ci_runner_disk_size
-      type  = var.boot_disk_type
-    }
+  disk {
+      source_image = var.boot_image
+      auto_delete  = true
+      disk_type    = var.boot_disk_type
+      disk_size_gb = var.ci_runner_disk_size
   }
 
   scheduling {
@@ -122,4 +121,14 @@ SCRIPT
     email  = google_service_account.ci_runner.email
     scopes = ["cloud-platform", "logging-write", "monitoring", "https://www.googleapis.com/auth/monitoring.write"]
   }
+}
+
+resource "google_compute_instance_group_manager" "ci-runner-gm" {
+  name               = "${var.gcp_resource_prefix}-runner-gm"
+  version {
+    instance_template  = google_compute_instance_template.ci_runner.id
+  }
+  base_instance_name = "${var.gcp_resource_prefix}-runner-gm"
+  zone               = var.gcp_zone
+  target_size        = "1"
 }
