@@ -1,6 +1,6 @@
 /**
+ * Copyright 2022 EDOT Ltd
  * Copyright 2021 Mantel Group Pty Ltd
- * Modified by EDOT Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ locals {
   ci_runner_github_name_final = (var.ci_runner_github_name != "" ? var.ci_runner_github_name : "gcp-${var.gcp_project}")
 }
 
-# Service account for the GitHub CI runner.  It doesn't run builds but it spawns other instances that do.
 resource "google_service_account" "ci_runner" {
   project      = var.gcp_project
   account_id   = "${var.gcp_resource_prefix}-runner"
@@ -39,9 +38,6 @@ resource "google_compute_instance_template" "ci_runner" {
   project      = var.gcp_project
   name         = "${var.gcp_resource_prefix}-runner"
   machine_type = var.ci_runner_instance_type
-  # zone         = var.gcp_zone
-
-  # allow_stopping_for_update = true
 
   disk {
       source_image = var.boot_image
@@ -58,19 +54,13 @@ resource "google_compute_instance_template" "ci_runner" {
   network_interface {
     network    = var.network_interface
     subnetwork = var.network_subnetwork
-    access_config {
-      // Ephemeral IP
-    }
   }
   metadata = {
     "shutdown-script" =<<SCRIPT
-    #stop and uninstall the runner service
     cd /runner || exit
     ./svc.sh stop
     ./svc.sh uninstall
-    #remove the runner configuration
-    token=$(curl -s -XPOST \
-    -H "authorization: token ${var.ci_token}" \
+    token=$(curl -s -XPOST -H "authorization: token ${var.ci_token}" \
     https://api.github.com/repos/${var.ci_owner}/${var.ci_repo}/actions/runners/registration-token | jq -r .token)
     RUNNER_ALLOW_RUNASROOT=1  /runner/config.sh remove --unattended --token $token
   SCRIPT
@@ -86,30 +76,21 @@ resource "google_compute_instance_template" "ci_runner" {
     apt-get -y install jq docker-ce docker-ce-cli containerd.io git
     # GCP agent
     curl -sSO https://dl.google.com/cloudagents/add-monitoring-agent-repo.sh && sudo bash add-monitoring-agent-repo.sh --also-install && sudo service stackdriver-agent start
-    #github runner version
-    curl -L -o /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" 
+    curl -L -o /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
     chmod a+x /usr/local/bin/kubectl
-    # GH_RUNNER_VERSION="2.278.0"
-    #get actions binary
-    curl -o actions.tar.gz --location "https://github.com/actions/runner/releases/download/v2.278.0/actions-runner-linux-x64-2.278.0.tar.gz"
+    export LATEST_GH_RUNNER_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name[1:]')
+    curl -o actions.tar.gz --location "https://github.com/actions/runner/releases/download/$LATEST_GH_RUNNER_VERSION/actions-runner-linux-x64-$LATEST_GH_RUNNER_VERSION.tar.gz"
     mkdir -p /runner
     mkdir -p /runner-tmp
     tar -zxf actions.tar.gz --directory /runner
     rm -f actions.tar.gz
     /runner/bin/installdependencies.sh
-    #get actions token
-    # shellcheck disable=SC2034
-    # ACTIONS_RUNNER_INPUT_NAME is used by config.sh
-    token=$(curl -s -XPOST \
-    -H "authorization: token ${var.ci_token}" \
+    token=$(curl -s -XPOST -H "authorization: token ${var.ci_token}" \
     https://api.github.com/repos/${var.ci_owner}/${var.ci_repo}/actions/runners/registration-token | jq -r .token)
     export ACTIONS_RUNNER_INPUT_NAME=$HOSTNAME
-    # reconfigure on restart if needed
     ./svc.sh uninstall || true
     RUNNER_ALLOW_RUNASROOT=1 /runner/config.sh remove --token $token || true
-    #configure runner
     RUNNER_ALLOW_RUNASROOT=1 /runner/config.sh --unattended --replace --work "/runner-tmp" --url https://github.com/${var.ci_owner}/${var.ci_repo} --token $token
-    #install and start runner service
     cd /runner || exit
     ./svc.sh install
     ./svc.sh start

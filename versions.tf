@@ -1,6 +1,6 @@
 /**
+ * Copyright 2022 EDOT Ltd
  * Copyright 2021 Mantel Group Pty Ltd
- * Modified by EDOT Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,5 +16,5 @@
  */
 
 terraform {
-  required_version = ">= 0.12"
+  required_version = ">= 0.14"
 }
