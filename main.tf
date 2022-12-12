@@ -29,6 +29,7 @@ resource "google_service_account" "ci_runner" {
 
 resource "google_project_iam_binding" "monitoring-writer-role" {
     role    = "roles/monitoring.metricWriter"
+    project      = var.gcp_project
      members = [
          "serviceAccount:${google_service_account.ci_runner.email}"
      ]
@@ -54,6 +55,7 @@ resource "google_compute_instance_template" "ci_runner" {
   network_interface {
     network    = var.network_interface
     subnetwork = var.network_subnetwork
+    access_config {}
   }
   metadata = {
     "shutdown-script" =<<SCRIPT
@@ -68,18 +70,20 @@ resource "google_compute_instance_template" "ci_runner" {
 
   metadata_startup_script = <<SCRIPT
     set -e
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key --keyring /usr/share/keyrings/docker-archive-keyring.gpg add -
     echo \
     "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-    $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+    $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+    echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee /etc/apt/sources.list.d/google-cloud-sdk.list > /dev/null
+    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
     apt-get update
-    apt-get -y install jq docker-ce docker-ce-cli containerd.io git
+    apt-get -y install jq docker-ce docker-ce-cli containerd.io git google-cloud-sdk-gke-gcloud-auth-plugin
     # GCP agent
-    curl -sSO https://dl.google.com/cloudagents/add-monitoring-agent-repo.sh && sudo bash add-monitoring-agent-repo.sh --also-install && sudo service stackdriver-agent start
+    curl -sSO https://dl.google.com/cloudagents/add-monitoring-agent-repo.sh && bash add-monitoring-agent-repo.sh --also-install && service stackdriver-agent start
     curl -L -o /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
     chmod a+x /usr/local/bin/kubectl
     export LATEST_GH_RUNNER_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name[1:]')
-    curl -o actions.tar.gz --location "https://github.com/actions/runner/releases/download/$LATEST_GH_RUNNER_VERSION/actions-runner-linux-x64-$LATEST_GH_RUNNER_VERSION.tar.gz"
+    curl -o actions.tar.gz --location "https://github.com/actions/runner/releases/download/v$LATEST_GH_RUNNER_VERSION/actions-runner-linux-x64-$LATEST_GH_RUNNER_VERSION.tar.gz"
     mkdir -p /runner
     mkdir -p /runner-tmp
     tar -zxf actions.tar.gz --directory /runner
