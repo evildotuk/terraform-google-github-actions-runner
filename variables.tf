@@ -1,5 +1,5 @@
 /**
- * Copyright 2022 EDOT Ltd
+ * Copyright 2022-2024 EDOT Ltd
  * Copyright 2021 Mantel Group Pty Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,8 +37,8 @@ variable "gcp_zone" {
   description = "The GCP zone to deploy the runner into."
 }
 variable "gcp_resource_prefix" {
-  type    = string
-  default = "github-ci"
+  type        = string
+  default     = "github-ci"
   description = "The prefix to apply to all GCP resource names (e.g. <prefix>-runner, <prefix>-worker-1)."
 }
 
@@ -47,16 +47,6 @@ variable "ci_runner_disk_size" {
   type        = string
   default     = "20"
   description = "The size of the persistent disk in GB."
-}
-variable "ci_runner_github_name" {
-  type        = string
-  default     = ""
-  description = "Register the runner in GitHub using this name.  If empty the value \"gcp-$${var.gcp_project}\" will be used."
-}
-variable "ci_runner_github_tags" {
-    type        = string
-    default     = ""
-    description = "Register the runner to execute GitHub jobs with these tags."
 }
 variable "ci_runner_instance_type" {
   type        = string
@@ -68,28 +58,28 @@ EOF
 }
 
 variable "network_interface" {
-  type = string
-  default = "default"
+  type        = string
+  default     = "default"
   description = "(Required) Networks to attach to the instance. This can be specified multiple times. Structure is documented below."
 }
 
 variable "network_subnetwork" {
-  type = string
-  default = null
+  type        = string
+  default     = null
   description = "(Optional) The name or self_link of the subnetwork to attach this interface to. The subnetwork must exist in the same region this instance will be created in. If network isn't provided it will be inferred from the subnetwork."
 }
 
 variable "boot_disk_type" {
-  type        = string
-  default     = "pd-balanced"
+  type    = string
+  default = "pd-balanced"
 }
 
 variable "boot_image" {
-  type = string
-  default = "ubuntu-2004-lts"
+  type    = string
+  default = "ubuntu-2404-lts"
 }
 
 variable "preemptible" {
-  type = bool
+  type    = bool
   default = true
 }

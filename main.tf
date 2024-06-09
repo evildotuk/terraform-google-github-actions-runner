@@ -1,5 +1,5 @@
 /**
- * Copyright 2022 EDOT Ltd
+ * Copyright 2022-2024 EDOT Ltd
  * Copyright 2021 Mantel Group Pty Ltd
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,11 +15,6 @@
  * limitations under the License.
  */
 
-# Compute the runner name to use for registration in GitHub.  We provide a default based on the GCP project name but it
-# can be overridden if desired.
-locals {
-  ci_runner_github_name_final = (var.ci_runner_github_name != "" ? var.ci_runner_github_name : "gcp-${var.gcp_project}")
-}
 
 resource "google_service_account" "ci_runner" {
   project      = var.gcp_project
@@ -28,12 +23,12 @@ resource "google_service_account" "ci_runner" {
 }
 
 resource "google_project_iam_binding" "monitoring-writer-role" {
-    role    = "roles/monitoring.metricWriter"
-    project      = var.gcp_project
-     members = [
-         "serviceAccount:${google_service_account.ci_runner.email}"
-     ]
- }
+  role    = "roles/monitoring.metricWriter"
+  project = var.gcp_project
+  members = [
+    "serviceAccount:${google_service_account.ci_runner.email}"
+  ]
+}
 
 resource "google_compute_instance_template" "ci_runner" {
   project      = var.gcp_project
@@ -41,15 +36,15 @@ resource "google_compute_instance_template" "ci_runner" {
   machine_type = var.ci_runner_instance_type
 
   disk {
-      source_image = var.boot_image
-      auto_delete  = true
-      disk_type    = var.boot_disk_type
-      disk_size_gb = var.ci_runner_disk_size
+    source_image = var.boot_image
+    auto_delete  = true
+    disk_type    = var.boot_disk_type
+    disk_size_gb = var.ci_runner_disk_size
   }
 
   scheduling {
-    preemptible         = var.preemptible
-    automatic_restart   = ! var.preemptible
+    preemptible       = var.preemptible
+    automatic_restart = !var.preemptible
   }
 
   network_interface {
@@ -58,7 +53,7 @@ resource "google_compute_instance_template" "ci_runner" {
     access_config {}
   }
   metadata = {
-    "shutdown-script" =<<SCRIPT
+    "shutdown-script" = <<SCRIPT
     cd /runner || exit
     ./svc.sh stop
     ./svc.sh uninstall
@@ -109,9 +104,9 @@ SCRIPT
 }
 
 resource "google_compute_instance_group_manager" "ci-runner-gm" {
-  name               = "${var.gcp_resource_prefix}-runner-gm"
+  name = "${var.gcp_resource_prefix}-runner-gm"
   version {
-    instance_template  = google_compute_instance_template.ci_runner.id
+    instance_template = google_compute_instance_template.ci_runner.id
   }
   base_instance_name = "${var.gcp_resource_prefix}-runner-gm"
   zone               = var.gcp_zone
