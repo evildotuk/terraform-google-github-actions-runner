@@ -76,7 +76,7 @@ variable "boot_disk_type" {
 
 variable "boot_image" {
   type    = string
-  default = "ubuntu-2404-lts"
+  default = "ubuntu-2404-lts-amd64"
 }
 
 variable "preemptible" {
