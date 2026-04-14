@@ -22,12 +22,10 @@ resource "google_service_account" "ci_runner" {
   display_name = "GitHub CI Runner"
 }
 
-resource "google_project_iam_binding" "monitoring-writer-role" {
+resource "google_project_iam_member" "monitoring-writer-role" {
   role    = "roles/monitoring.metricWriter"
   project = var.gcp_project
-  members = [
-    "serviceAccount:${google_service_account.ci_runner.email}"
-  ]
+  member  = "serviceAccount:${google_service_account.ci_runner.email}"
 }
 
 resource "google_compute_instance_template" "ci_runner" {
@@ -57,9 +55,13 @@ resource "google_compute_instance_template" "ci_runner" {
     cd /runner || exit
     ./svc.sh stop
     ./svc.sh uninstall
-    token=$(curl -s -XPOST -H "authorization: token ${var.ci_token}" \
-    https://api.github.com/repos/${var.ci_owner}/${var.ci_repo}/actions/runners/registration-token | jq -r .token)
-    RUNNER_ALLOW_RUNASROOT=1  /runner/config.sh remove --unattended --token $token
+    token=$(curl -s -L \
+      -X POST \
+      -H "Accept: application/vnd.github+json" \
+      -H "Authorization: Bearer ${var.ci_token}" \
+      -H "X-GitHub-Api-Version: 2026-03-10" \
+      https://api.github.com/orgs/${var.ci_owner}/actions/runners/registration-token | jq -r .token)
+    RUNNER_ALLOW_RUNASROOT=1 /runner/config.sh remove --unattended --token $token
   SCRIPT
   }
 
@@ -84,12 +86,16 @@ resource "google_compute_instance_template" "ci_runner" {
     tar -zxf actions.tar.gz --directory /runner
     rm -f actions.tar.gz
     /runner/bin/installdependencies.sh
-    token=$(curl -s -XPOST -H "authorization: token ${var.ci_token}" \
-    https://api.github.com/repos/${var.ci_owner}/${var.ci_repo}/actions/runners/registration-token | jq -r .token)
+    token=$(curl -s -L \
+      -X POST \
+      -H "Accept: application/vnd.github+json" \
+      -H "Authorization: Bearer ${var.ci_token}" \
+      -H "X-GitHub-Api-Version: 2026-03-10" \
+      https://api.github.com/orgs/${var.ci_owner}/actions/runners/registration-token | jq -r .token)
     export ACTIONS_RUNNER_INPUT_NAME=$HOSTNAME
-    ./svc.sh uninstall || true
-    RUNNER_ALLOW_RUNASROOT=1 /runner/config.sh remove --token $token || true
-    RUNNER_ALLOW_RUNASROOT=1 /runner/config.sh --unattended --replace --work "/runner-tmp" --url https://github.com/${var.ci_owner}/${var.ci_repo} --token $token
+    export RUNNER_ALLOW_RUNASROOT=1
+    /runner/config.sh remove --token $token || true
+    /runner/config.sh --unattended --replace --work "/runner-tmp" --url https://github.com/${var.ci_owner} --token $token
     cd /runner || exit
     ./svc.sh install
     ./svc.sh start
