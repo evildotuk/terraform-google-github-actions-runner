@@ -101,6 +101,10 @@ SCRIPT
     email  = google_service_account.ci_runner.email
     scopes = ["cloud-platform", "logging-write", "monitoring", "https://www.googleapis.com/auth/monitoring.write"]
   }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "google_compute_instance_group_manager" "ci-runner-gm" {
