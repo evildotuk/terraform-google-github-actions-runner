@@ -30,7 +30,7 @@ resource "google_project_iam_member" "monitoring-writer-role" {
 
 resource "google_compute_instance_template" "ci_runner" {
   project      = var.gcp_project
-  name         = "${var.gcp_resource_prefix}-runner"
+  name_prefix  = "${var.gcp_resource_prefix}-runner-"
   machine_type = var.ci_runner_instance_type
 
   disk {
