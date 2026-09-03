@@ -1,0 +1,4 @@
+!secrets.tf
+packer/packer-manifest.json
+packer/*.pkrvars.hcl
+packer_cache/
