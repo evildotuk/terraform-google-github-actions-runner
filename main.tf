@@ -16,6 +16,13 @@
  */
 
 
+locals {
+  ci_repo                  = var.ci_repo == null ? "" : var.ci_repo
+  github_runner_api_path   = var.runner_scope == "repository" ? "repos/${var.ci_owner}/${local.ci_repo}" : "orgs/${var.ci_owner}"
+  github_runner_url        = var.runner_scope == "repository" ? "https://github.com/${var.ci_owner}/${local.ci_repo}" : "https://github.com/${var.ci_owner}"
+  github_runner_labels_arg = length(var.runner_labels) > 0 ? "--labels \"${join(",", var.runner_labels)}\"" : ""
+}
+
 resource "google_service_account" "ci_runner" {
   project      = var.gcp_project
   account_id   = "${var.gcp_resource_prefix}-runner"
@@ -24,6 +31,12 @@ resource "google_service_account" "ci_runner" {
 
 resource "google_project_iam_member" "monitoring-writer-role" {
   role    = "roles/monitoring.metricWriter"
+  project = var.gcp_project
+  member  = "serviceAccount:${google_service_account.ci_runner.email}"
+}
+
+resource "google_project_iam_member" "logging-writer-role" {
+  role    = "roles/logging.logWriter"
   project = var.gcp_project
   member  = "serviceAccount:${google_service_account.ci_runner.email}"
 }
@@ -48,59 +61,53 @@ resource "google_compute_instance_template" "ci_runner" {
   network_interface {
     network    = var.network_interface
     subnetwork = var.network_subnetwork
-    access_config {}
+
+    dynamic "access_config" {
+      for_each = var.assign_public_ip ? [1] : []
+      content {}
+    }
   }
   metadata = {
     "shutdown-script" = <<SCRIPT
+    set -Eeuo pipefail
     cd /runner || exit
-    ./svc.sh stop
-    ./svc.sh uninstall
-    token=$(curl -s -L \
+    ./svc.sh stop || true
+    ./svc.sh uninstall || true
+    github_api_token=$(gcloud secrets versions access "${var.ci_token_secret_version}" \
+      --project="${local.ci_token_secret_project}" \
+      --secret="${var.ci_token_secret_id}")
+    token=$(curl --fail-with-body --silent --show-error --location --retry 3 \
       -X POST \
       -H "Accept: application/vnd.github+json" \
-      -H "Authorization: Bearer ${var.ci_token}" \
+      -H "Authorization: Bearer $github_api_token" \
       -H "X-GitHub-Api-Version: 2026-03-10" \
-      https://api.github.com/orgs/${var.ci_owner}/actions/runners/registration-token | jq -r .token)
-    RUNNER_ALLOW_RUNASROOT=1 /runner/config.sh remove --unattended --token $token
+      "https://api.github.com/${local.github_runner_api_path}/actions/runners/remove-token" | jq -er .token)
+    unset github_api_token
+    runuser -u actions-runner -- env HOME=/home/actions-runner \
+      /runner/config.sh remove --unattended --token "$token"
   SCRIPT
   }
 
   metadata_startup_script = <<SCRIPT
-    set -e
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key --keyring /usr/share/keyrings/docker-archive-keyring.gpg add -
-    echo \
-    "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-    $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-    echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | tee /etc/apt/sources.list.d/google-cloud-sdk.list > /dev/null
-    curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key --keyring /usr/share/keyrings/cloud.google.gpg add -
-    apt-get update
-    apt-get -y install jq docker-ce docker-ce-cli containerd.io git google-cloud-sdk-gke-gcloud-auth-plugin
-    # GCP agent
-    curl -sSO https://dl.google.com/cloudagents/add-monitoring-agent-repo.sh && bash add-monitoring-agent-repo.sh --also-install && service stackdriver-agent start
-    curl -L -o /usr/local/bin/kubectl "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-    chmod a+x /usr/local/bin/kubectl
-    export LATEST_GH_RUNNER_VERSION=$(curl -s https://api.github.com/repos/actions/runner/releases/latest | jq -r '.tag_name[1:]')
-    curl -o actions.tar.gz --location "https://github.com/actions/runner/releases/download/v$LATEST_GH_RUNNER_VERSION/actions-runner-linux-x64-$LATEST_GH_RUNNER_VERSION.tar.gz"
-    mkdir -p /runner
-    mkdir -p /runner-tmp
-    tar -zxf actions.tar.gz --directory /runner
-    rm -f actions.tar.gz
-    /runner/bin/installdependencies.sh
-    token=$(curl -s -L \
+    set -Eeuo pipefail
+    test -x /runner/config.sh
+    github_api_token=$(gcloud secrets versions access "${var.ci_token_secret_version}" \
+      --project="${local.ci_token_secret_project}" \
+      --secret="${var.ci_token_secret_id}")
+    token=$(curl --fail-with-body --silent --show-error --location --retry 5 \
       -X POST \
       -H "Accept: application/vnd.github+json" \
-      -H "Authorization: Bearer ${var.ci_token}" \
+      -H "Authorization: Bearer $github_api_token" \
       -H "X-GitHub-Api-Version: 2026-03-10" \
-      https://api.github.com/orgs/${var.ci_owner}/actions/runners/registration-token | jq -r .token)
-    export ACTIONS_RUNNER_INPUT_NAME=$HOSTNAME
-    export RUNNER_ALLOW_RUNASROOT=1
-    /runner/config.sh remove --token $token || true
-    /runner/config.sh --unattended --replace --work "/runner-tmp" --url https://github.com/${var.ci_owner} --token $token
-    cd /runner || exit
-    ./svc.sh install
+      "https://api.github.com/${local.github_runner_api_path}/actions/runners/registration-token" | jq -er .token)
+    unset github_api_token
+    runuser -u actions-runner -- env HOME=/home/actions-runner \
+      /runner/config.sh --unattended --replace --disableupdate --name "$HOSTNAME" --work "/runner-tmp" --url "${local.github_runner_url}" --token "$token" ${local.github_runner_labels_arg}
+    cd /runner
+    ./svc.sh install actions-runner
     ./svc.sh start
-    (crontab -l 2>/dev/null; echo "0 * * * * docker system prune -af  --filter \"until=12h\"") | crontab -
-    (crontab -l 2>/dev/null; echo "0 * * * * docker builder prune -af  --filter \"until=12h\"") | crontab -
+    (crontab -l 2>/dev/null; echo "0 * * * * docker system prune -af --filter \"until=12h\"") | crontab -
+    (crontab -l 2>/dev/null; echo "0 * * * * docker builder prune -af --filter \"until=12h\"") | crontab -
 SCRIPT
 
   service_account {
@@ -110,7 +117,14 @@ SCRIPT
 
   lifecycle {
     create_before_destroy = true
+
+    precondition {
+      condition     = var.runner_scope != "repository" || trimspace(local.ci_repo) != ""
+      error_message = "ci_repo must be set when runner_scope is repository."
+    }
   }
+
+  depends_on = [google_secret_manager_secret_iam_member.ci_runner_token]
 }
 
 resource "google_compute_instance_group_manager" "ci-runner-gm" {

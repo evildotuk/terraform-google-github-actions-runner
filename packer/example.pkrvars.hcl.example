@@ -1,0 +1,20 @@
+project_id = "my-gcp-project"
+zone       = "europe-west2-a"
+
+# Optional. Must match root Terraform packer_service_account_id when overridden.
+# service_account_id = "github-runner-packer"
+
+# Pin both values from the actions/runner release page.
+runner_version = "REPLACE_WITH_RUNNER_VERSION"
+runner_sha256  = "REPLACE_WITH_64_CHARACTER_LINUX_X64_SHA256"
+
+# Pin both values from the aquasecurity/trivy release page.
+trivy_version = "REPLACE_WITH_TRIVY_VERSION"
+trivy_sha256  = "REPLACE_WITH_64_CHARACTER_LINUX_64BIT_SHA256"
+
+# Optional overrides:
+# source_image_family = "ubuntu-2404-lts-amd64"
+# image_family        = "github-actions-runner"
+# image_name          = "github-actions-runner-20260830"
+# network        = "default"
+# use_internal_ip = false
